@@ -122,6 +122,75 @@
     }
   }
 
+  // -------------------------------------------------------- Web Serial ----
+  /**
+   * Classic Bluetooth modules (HC-05 / HC-06 / JDY-31) are not visible to Web
+   * Bluetooth. Once paired in the OS they appear as a COM port, which Web Serial
+   * can open. The same transport also works over a USB cable.
+   */
+  class SerialTransport extends Emitter {
+    constructor(cfg = {}) {
+      super();
+      this.baud = cfg.baud || 9600;
+      this.port = null; this.writer = null; this.reader = null;
+      this.connected = false;
+      this._buf = '';
+      this._decoder = new TextDecoder();
+      this._encoder = new TextEncoder();
+    }
+
+    static supported() { return typeof navigator !== 'undefined' && !!navigator.serial; }
+    get name() { return 'Serial port'; }
+
+    async connect() {
+      if (!SerialTransport.supported()) throw new Error('Web Serial is not available in this browser. Use Chrome or Edge.');
+      this.port = await navigator.serial.requestPort();
+      await this.port.open({ baudRate: this.baud });
+      this.writer = this.port.writable.getWriter();
+      this.connected = true;
+      this._readLoop();
+    }
+
+    async _readLoop() {
+      try {
+        while (this.port.readable && this.connected) {
+          this.reader = this.port.readable.getReader();
+          try {
+            for (;;) {
+              const { value, done } = await this.reader.read();
+              if (done) break;
+              if (value) this._handleBytes(value);
+            }
+          } finally { this.reader.releaseLock(); }
+        }
+      } catch (_) { /* port lost */ }
+      if (this.connected) { this.connected = false; this._emitDisc(); }
+    }
+
+    _handleBytes(bytes) {
+      this._buf += this._decoder.decode(bytes, { stream: true });
+      let i;
+      while ((i = this._buf.search(/[\r\n]/)) >= 0) {
+        const line = this._buf.slice(0, i).trim();
+        this._buf = this._buf.slice(i + 1);
+        if (line) this._emitLine(line);
+      }
+    }
+
+    async write(text) {
+      if (!this.connected) throw new Error('Serial port is not connected');
+      await this.writer.write(this._encoder.encode(text));
+    }
+
+    async disconnect() {
+      this.connected = false;
+      try { await this.reader?.cancel(); } catch (_) { /* ignore */ }
+      try { this.writer?.releaseLock(); } catch (_) { /* ignore */ }
+      try { await this.port?.close(); } catch (_) { /* ignore */ }
+      this._emitDisc();
+    }
+  }
+
   // ---------------------------------------------------------- Simulator ----
   /**
    * A software model of the Arduino firmware: same protocol, same queue/ack
@@ -218,5 +287,5 @@
     }
   }
 
-  PW.Transport = { BleTransport, SimTransport, BLE_PRESETS, sleep };
+  PW.Transport = { BleTransport, SerialTransport, SimTransport, BLE_PRESETS, sleep };
 })(typeof window !== 'undefined' ? window : globalThis);

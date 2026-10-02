@@ -57,7 +57,10 @@ Set *Machine settings → Simulator speed* to 20× to watch a page "plot" in a m
 
 * Power the motors and servo from a separate 5 V ≥ 2 A supply, not the Uno's 5 V pin.
 * The module **must be BLE** (HM-10, AT-09, CC41, …). Classic-Bluetooth modules such as the
-  HC-05/HC-06/JDY-31 are invisible to Web Bluetooth.
+  HC-05/HC-06/JDY-31 are invisible to Web Bluetooth. To use an **HC-05** instead: pair it in
+  Windows (Settings → Bluetooth, PIN `1234`), then click **HC-05 / USB** in the app and pick the
+  "Standard Serial over Bluetooth" COM port (the *outgoing* one). It must be at 9600 baud (default
+  data mode). Wire HC-05 TXD → D11 and RXD → D12 via the 1k/2k divider, same as the BLE module.
 * HM-10 default is 9600 baud, which matches the firmware. Its UUIDs (service `FFE0`,
   characteristic `FFE1`) are the app's default profile; Nordic-UART and custom UUIDs are in
   *Machine settings*.

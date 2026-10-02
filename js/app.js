@@ -235,6 +235,21 @@
     await afterConnect(t, 'ble', `Connected · ${t.name}`);
   }
 
+  async function connectSerial() {
+    const t = new Transport.SerialTransport({ baud: 9600 });
+    setConn('busy', 'Connecting…');
+    try {
+      await t.connect();
+    } catch (e) {
+      setConn('off', 'Disconnected');
+      if (e && e.name === 'NotFoundError') return; // user closed the chooser
+      log('err', 'Serial: ' + e.message);
+      toast('Serial connection failed: ' + e.message, 'error');
+      return;
+    }
+    await afterConnect(t, 'serial', 'Connected · Serial (HC-05)');
+  }
+
   async function connectSim() {
     const t = new Transport.SimTransport({ timeScale: settings.simScale });
     setConn('busy', 'Starting…');
@@ -389,15 +404,20 @@
     document.querySelectorAll('#alignSeg button').forEach((b) => { b.disabled = plotter.running; });
 
     $('btnConnect').textContent = connected && mode === 'ble' ? 'Disconnect' : 'Connect Bluetooth';
-    $('btnConnect').disabled = connected && mode === 'sim';
+    $('btnConnect').disabled = connected && mode !== 'ble';
+    $('btnSerial').textContent = connected && mode === 'serial' ? 'Disconnect' : 'HC-05 / USB';
+    $('btnSerial').disabled = (connected && mode !== 'serial') || !Transport.SerialTransport.supported();
     $('btnSim').textContent = connected && mode === 'sim' ? 'Stop simulator' : 'Simulator';
-    $('btnSim').disabled = connected && mode === 'ble';
+    $('btnSim').disabled = connected && mode !== 'sim';
     if (!connected) { setPen(undefined, undefined, undefined); if (!plotter.running) setProgressUI(0, 0); }
   }
 
   function wireControls() {
     $('btnConnect').addEventListener('click', async () => {
       if (plotter.connected) await plotter.disconnect(); else await connectBle();
+    });
+    $('btnSerial').addEventListener('click', async () => {
+      if (plotter.connected) await plotter.disconnect(); else await connectSerial();
     });
     $('btnSim').addEventListener('click', async () => {
       if (plotter.connected) await plotter.disconnect(); else await connectSim();
